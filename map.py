@@ -29,8 +29,8 @@ region_order_map = {
     "CAR (Cordillera Administrative Region)": 2,
     "Region 2 (Cagayan Valley)": 3,
     "Region 3 (Central Luzon)": 4,
-    "Region 4A (CALABARZON)": 5,
-    "Region 4B (MIMAROPA)": 6,
+    "Region 4-A (CALABARZON)": 5,
+    "Region 4-B (MIMAROPA)": 6,
     "Region 5 (Bicol Region)": 7,
     "Region 6 (Western Visayas)": 8,
     "Region 7 (Central Visayas)": 9,
@@ -495,34 +495,55 @@ gfa_category_order = [
     "Final Advisory"
 ]
 
-def format_gfa_provinces(provinces_by_gfa_type):
+def format_gfa_provinces(provinces_by_gfa_type, event_details, issued_date_time_part, validity_info_part):
     color_map = {
         "Flood Warning": {"background": "#B22B42", "text": "#FFFFFF"},
         "Flood Alert": {"background": "#E6793B", "text": "#FFFFFF"},
         "Flood Monitoring": {"background": "#F3C218", "text": "#000000"},
-        "Final Advisory": {"background": "#777777", "text": "#FFFFFF"}
+        "Final Advisory": {"background": "#777777", "text": "#FFFFFF"},
+        # "No Advisory": {"background": "#DDDDDD", "text": "#333333"}
     }
 
-    formatted_html = ""
-    for gfa_type, provinces in provinces_by_gfa_type.items():
-        colors = color_map.get(gfa_type, {"background": "#FFFFFF", "text": "#333333"})
+    formatted_html = """
+    """
+    if not provinces_by_gfa_type:
+         formatted_html += f"""
+        <div style="font-size: 12px; margin-top: 8px; text-align: center; color: #555;">No provinces are currently under General Flood Advisory.</div>
+        """
+    else:
+        for gfa_type in gfa_category_order:
+            if gfa_type in provinces_by_gfa_type:
+                provinces = provinces_by_gfa_type[gfa_type]
+                colors = color_map.get(gfa_type, {"background": "#FFFFFF", "text": "#333333"})
+                details = event_details.get(gfa_type, {'text': '', 'icon': ''})
+                
+                icon_html = f'<img src="{details["icon"]}" style="width: 36px; height: 36px; margin-right: 4px; flex-shrink: 0;">' if details['icon'] else ''
 
-        formatted_html += f"<strong style='" \
-                                     f"font-size: 14px; " \
-                                     f"display: block; " \
-                                     f"width: 100%; " \
-                                     f"text-align: center; " \
-                                     f"margin-top: 2px; " \
-                                     f"padding: 2px 5px; " \
-                                     f"border-radius: 3px; " \
-                                     f"background-color: {colors['background']}; " \
-                                     f"color: {colors['text']};" \
-                                     f"'>{gfa_type}</strong>"
-
-        formatted_html += "<ul style='margin: 0; padding-left: 20px; list-style-type: disc; column-count: 2; column-gap: 15px; break-inside: avoid;'>"
-        for province in provinces:
-            formatted_html += f"<li style='font-size: 12px; margin-bottom: 2px;'>{province}</li>"
-        formatted_html += "</ul>"
+                formatted_html += f"""
+                <div style="
+                    font-size: 14px;
+                    display: flex;
+                    align-items: center;
+                    width: 100%;
+                    text-align: left;
+                    margin-top: 8px;
+                    padding: 4px 8px 5px 4px;
+                    border-radius: 3px;
+                    background-color: {colors['background']};
+                    color: {colors['text']};
+                    font-weight: bold;
+                ">
+                    {icon_html}
+                    <div style="flex-grow: 1;">
+                        {gfa_type}
+                        <div style="font-size: 12px; font-weight: normal; line-height: 1.2;">{details['text']}</div>
+                    </div>
+                </div>
+                <ul style='margin: 0; margin-top: 4px; padding-left: 20px; list-style-type: disc; list-style-position: outside; column-count: 2; column-gap: 8px; break-inside: avoid;'>
+                """
+                for province in provinces:
+                    formatted_html += f"<li style='font-size: 12px; margin-bottom: 2px; color: #333;'>{province}</li>"
+                formatted_html += "</ul>"
     return formatted_html
 
 def create_flood_map(gfa_data, province_geojson_path):
@@ -550,7 +571,7 @@ def create_flood_map(gfa_data, province_geojson_path):
         severity_raw = data.get('severity_raw', 'Unknown')
         severity_color = get_severity_color(severity_raw)
         severity_level = get_severity_level(severity_raw)
-         
+        
         area_descs = data.get('areaDescs', [])
         region = data.get('region', 'N/A')
         sent_time = data.get('sent', 'N/A')
@@ -566,7 +587,7 @@ def create_flood_map(gfa_data, province_geojson_path):
 
                 if severity_level > current_max_severity:
                     province_rivers_info = rivers_data_for_this_cap.get(cleaned_province_name_cap_lower, 'N/A')
-                     
+                    
                     province_info[cleaned_province_name_cap_lower] = {
                         'color': severity_color,
                         'severity_level': severity_level,
@@ -593,67 +614,27 @@ def create_flood_map(gfa_data, province_geojson_path):
         return
 
     event_details = {
-        'Flood Warning': {
+        "Flood Warning": {
             'text': 'Take appropriate actions immediately.',
             'icon': 'https://pubfiles.pagasa.dost.gov.ph/pagasaweb/icons/hazard/flood/64/flood-warning.png'
         },
-        'Flood Alert': {
+        "Flood Alert": {
             'text': 'Be alert for possible flashfloods and landslides.',
             'icon': 'https://pubfiles.pagasa.dost.gov.ph/pagasaweb/icons/hazard/flood/64/flood-alert.png'
         },
-        'Flood Monitoring': {
+        "Flood Monitoring": {
             'text': 'Take necessary precautionary measures.',
             'icon': 'https://pubfiles.pagasa.dost.gov.ph/pagasaweb/icons/hazard/flood/64/flood-monitoring.png'
         },
-        'Final Advisory': {
+        "Final Advisory": {
             'text': 'Flood is no longer likely unless significant rain occurs.',
             'icon': 'https://pubfiles.pagasa.dost.gov.ph/pagasaweb/icons/hazard/flood/64/final.png'
         },
-        'No Advisory': {
+        "No Advisory": {
             'text': 'No provinces are currently under General Flood Advisory.',
             'icon': ''
         }
     }
-
-    current_overall_event_type = "No Advisory"
-    overall_color = '#777777'
-    overall_text_color = 'white'
-
-    highest_severity_level_on_map = 0
-    if province_info:
-        for prov_data in province_info.values():
-            highest_severity_level_on_map = max(highest_severity_level_on_map, prov_data['severity_level'])
-
-    if highest_severity_level_on_map >= get_severity_level('Extreme'):
-        current_overall_event_type = 'Flood Warning'
-        overall_color = get_severity_color('Extreme')
-        overall_text_color = 'white'
-    elif highest_severity_level_on_map >= get_severity_level('Severe'):
-        current_overall_event_type = 'Flood Alert'
-        overall_color = get_severity_color('Severe')
-        overall_text_color = 'white'
-    elif highest_severity_level_on_map >= get_severity_level('Moderate'):
-        current_overall_event_type = 'Flood Monitoring'
-        overall_color = get_severity_color('Moderate')
-        overall_text_color = 'black'
-    elif highest_severity_level_on_map == get_severity_level('Final'):
-        current_overall_event_type = 'Final Advisory'
-        overall_color = get_severity_color('Final')
-        overall_text_color = 'white'
-
-    selected_event_details = event_details.get(current_overall_event_type, event_details['No Advisory'])
-    descriptive_text = selected_event_details['text']
-    icon_url = selected_event_details['icon']
-
-    header_html_inner_content = ""
-    if icon_url:
-        header_html_inner_content += f'<img src="{icon_url}" style="width: 32px; height: 32px; margin-right: 8px; flex-shrink: 0;">'
-
-    header_html_inner_content += f'''
-        <div style="flex-grow: 1;"> <div style="font-weight: bold;">{current_overall_event_type}</div>
-            <div style="font-size: 0.9em; line-height: 1.2; margin-top: 2px;">{descriptive_text}</div>
-        </div>
-    '''
 
     provinces_by_gfa_type_for_summary = {}
     for cleaned_prov_name_lower, info in province_info.items():
@@ -708,10 +689,10 @@ def create_flood_map(gfa_data, province_geojson_path):
         if latest_sent_time:
             issued_date_time_part, validity_info_part = format_issued_time(latest_sent_time.isoformat())
 
-    gfa_provinces_summary_text = format_gfa_provinces(sorted_provinces_by_gfa_type)
+    gfa_provinces_summary_text = format_gfa_provinces(sorted_provinces_by_gfa_type, event_details, issued_date_time_part, validity_info_part)
 
     info_html = f"""
-    <div style="
+    <div id="InfoBox" style="
         position: absolute;
         top: 10px;
         left: 10px;
@@ -724,88 +705,119 @@ def create_flood_map(gfa_data, province_geojson_path):
         align-items: flex-start;
         font-family: Arial, sans-serif;
         border: 2px solid rgba(0,0,0,0.35);
+        width: 320px;
         max-width: 320px;
     ">
-        <div style="display: flex; align-items: center; width: 100%;">
+        <div style="display: flex; align-items: center; width: 100%; margin-bottom: 4px;">
             <img src="https://pubfiles.pagasa.dost.gov.ph/pagasaweb/images/pagasa-logo.png" alt="PAGASA Logo" style="width: 44px; height: 44px; margin-right: 8px;">
             <div style="display: flex; flex-direction: column;">
                 <span style="font-size: 14px; font-weight: bold; color: #333;">DOST-PAGASA</span>
                 <span style="font-size: 14px; color: #555;">Flood Forecasting and Warning Center</span>
             </div>
         </div>
-        <div style="display: flex; flex-direction: column; width: 100%;">
-            <span style="font-size: 24px; font-weight: bold; color: #333; margin-top: 4px">General Flood Advisories</span>
+
+        <div style="display: flex; flex-direction: column; width: 100%; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 8px;">
+            <span style="font-size: 24px; font-weight: bold; color: #333; margin-top: 2px">General Flood Advisories</span>
             <span style="font-size: 14px; color: #333;">Issued at: {issued_date_time_part}</span>
             <span style="font-size: 11px; color: #333;">({validity_info_part})</span>
         </div>
 
-        <div style="
-            width: 100%;
-            background-color: {overall_color};
-            color: {overall_text_color};
-            padding: 8px;
-            border-radius: 4px;
-            margin-top: 8px;
-            margin-bottom: 8px;
+        <div id="provincesHeader" style="
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #333;
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            text-align: left;
+            user-select: none;
+            width: 100%;
         ">
-            {header_html_inner_content}
+            <span>Provinces under Active Advisories:</span>
+            <i class="fa-solid fa-chevron-up" id="collapseIcon" style="transition: transform 0.3s ease-in-out;"></i>
         </div>
-        <div style="width: 100%; border-top: 1px solid #eee; margin-top: 4px; padding-top: 8px;">
-            <div id="summaryHeader" style="
-                font-size: 14px;
-                font-weight: bold;
-                cursor: pointer;
-                color: #333;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                user-select: none;
-            ">
-                <span>Provinces under Active Advisories:</span>
-                <i class="fa-solid fa-chevron-down" id="collapseIcon" style="transition: transform 0.3s ease-in-out;"></i>
-            </div>
-            <div id="provincesSummaryContent" style="
-                margin-top: 4px;
-                font-size: 14px;
-                max-height: 480px;
-                overflow-y: auto;
-                box-sizing: border-box;
-                width: 100%;
-                display: none;
-                transition: max-height 0.3s ease-in-out;
-            ">
-                {gfa_provinces_summary_text}
-            </div>
+        <div id="provincesSummaryContent" style="
+            font-size: 14px;
+            max-height: calc(100vh - 197px);
+            overflow-y: auto;
+            box-sizing: border-box;
+            width: 100%;
+            display: block;
+            transition: max-height 0.3s ease-in-out;
+        ">
+            {gfa_provinces_summary_text}
         </div>
-    </div>
+        </div>
     """
     m.get_root().html.add_child(folium.Element(info_html))
 
     toggle_script = """
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            var header = document.getElementById('summaryHeader');
+            var header = document.getElementById('provincesHeader');
             var content = document.getElementById('provincesSummaryContent');
             var icon = document.getElementById('collapseIcon');
+            var infoBox = document.getElementById('InfoBox');
+
+            var isThreeColumn = false;
+
+            function adjustLayout() {
+                if (!infoBox) {
+                    console.warn("Info box element not found for width adjustment.");
+                    return;
+                }
+
+                var provinceLists = content.querySelectorAll('ul');
+                var provinceItems = content.querySelectorAll('li');
+
+                if (content.scrollHeight > content.clientHeight && !isThreeColumn) {
+                    provinceLists.forEach(function(ul) {
+                        ul.style.columnCount = '3';
+                        ul.style.columnGap = '8px';
+                    });
+                    provinceItems.forEach(function(li) {
+                        li.style.fontSize = '11px';
+                        li.style.marginBottom = '1px';
+                    });
+                    infoBox.style.width = '400px';
+                    infoBox.style.maxWidth = '400px';
+                    isThreeColumn = true;
+                    console.log('Switched to 3 columns / 360px width / 11px font size due to scrollbar.');
+
+                } else if (!isThreeColumn) {
+                    provinceLists.forEach(function(ul) {
+                        ul.style.columnCount = '2';
+                        ul.style.columnGap = '8px';
+                    });
+                    provinceItems.forEach(function(li) {
+                        li.style.fontSize = '12px';
+                    });
+                    infoBox.style.width = '320px';
+                    infoBox.style.maxWidth = '320px';
+                    console.log('Reverted to 2 columns / 320px width / 12px font size (no scrollbar).');
+                }
+            }
 
             content.style.display = 'block';
             icon.classList.remove('fa-chevron-down');
             icon.classList.add('fa-chevron-up');
 
+            adjustLayout();
+
             header.onclick = function() {
-                if (content.style.display === 'none') {
+                if (content.style.display === 'none' || content.style.display === '') {
                     content.style.display = 'block';
                     icon.classList.remove('fa-chevron-down');
                     icon.classList.add('fa-chevron-up');
+                    adjustLayout();
                 } else {
                     content.style.display = 'none';
                     icon.classList.remove('fa-chevron-up');
                     icon.classList.add('fa-chevron-down');
                 }
             };
+
+            window.addEventListener('resize', adjustLayout);
         });
     </script>
     """
@@ -1036,7 +1048,7 @@ def create_flood_map(gfa_data, province_geojson_path):
     </script>
     """
     m.get_root().html.add_child(folium.Element(move_zoom_control_js_html))
-     
+    
     folium.LayerControl().add_to(m)
     m.fit_bounds([southwest, northeast])
     map_output_path = "gfa.html"
