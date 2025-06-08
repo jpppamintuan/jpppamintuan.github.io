@@ -11,7 +11,7 @@ if ipython:
 
 import folium
 import geopandas as gpd
-from shapely.geometry import Point, Polygon
+from shapely.geometry import Point, Polygon, MultiPolygon
 from shapely.validation import make_valid
 from shapely.ops import polylabel
 import re
@@ -22,6 +22,7 @@ import xml.etree.ElementTree as ET
 import traceback
 from bs4 import BeautifulSoup
 import time
+import pandas as pd
 
 region_order_map = {
     "NCR (National Capital Region)": 0,
@@ -109,6 +110,24 @@ def get_styled_province_function(province_info_dict):
             'fillOpacity': fill_opacity,
         }
     return styled_province_function
+
+def load_province_label_coordinates(csv_filepath="centroids.csv"):
+    try:
+        df = pd.read_csv(csv_filepath)
+        coords_dict = {}
+        for index, row in df.iterrows():
+            province_name_cleaned = str(row['Province']).strip().lower()
+            coords_dict[province_name_cleaned] = [row['Latitude'], row['Longitude']]
+        return coords_dict
+    except FileNotFoundError:
+        print(f"Error: Province coordinates CSV file not found at {csv_filepath}")
+        return {}
+    except KeyError as e:
+        print(f"Error: Missing expected column in CSV: {e}. Make sure you have 'Province', 'Latitude', 'Longitude'.")
+        return {}
+    except Exception as e:
+        print(f"An unexpected error occurred while reading the CSV: {e}")
+        return {}
 
 def process_instruction_text(instruction_text):
     if not isinstance(instruction_text, str):
@@ -843,7 +862,7 @@ def create_flood_map(gfa_data, province_geojson_path):
 
     folium.GeoJson(
         provinces_gdf,
-        name='Flood Advisory Provinces Colored',
+        name='Areas (Provinces under Active Advisories)',
         style_function=map_styled_province_function,
         tooltip=tooltip_field
     ).add_to(m)
@@ -857,58 +876,57 @@ def create_flood_map(gfa_data, province_geojson_path):
             cleaned_province_name_lower = province_name.replace('Province of ', '').strip().lower()
 
             if cleaned_province_name_lower in province_info:
-                if row.geometry:
-                    geometry_for_label = None
+                label_coords = province_label_coordinates.get(cleaned_province_name_lower)
 
+                label_html = f'<div style="font-size: 8pt; color: black; text-align: center; white-space: nowrap; text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF;">{province_name}</div>'
+
+                final_label_coords = None
+                if label_coords:
+                    final_label_coords = label_coords
+                elif row.geometry:
+                    geometry_for_label = None
                     if not row.geometry.is_valid:
                         try:
                             repaired_geometry = make_valid(row.geometry)
                             if repaired_geometry and not repaired_geometry.is_empty and repaired_geometry.is_valid:
                                 geometry_for_label = repaired_geometry
-                            else:
-                                pass
-                        except Exception as e:
-                            geometry_for_label = None
+                        except Exception:
+                            pass
                     else:
                         geometry_for_label = row.geometry
 
                     if geometry_for_label and geometry_for_label.is_valid:
                         label_point = None
-
                         try:
-                            # You need to ensure 'polylabel' is imported or defined
                             if geometry_for_label.geom_type == 'Polygon':
                                 label_point = polylabel(geometry_for_label, tolerance=0.001)
-
                             elif geometry_for_label.geom_type == 'MultiPolygon':
                                 largest_part = None
                                 max_area = -1
-
                                 for part in geometry_for_label.geoms:
                                     if isinstance(part, Polygon) and part.is_valid:
                                         part_area = part.area
                                         if part_area > max_area:
                                             largest_part = part
                                             max_area = part_area
-
                                 if largest_part:
                                     label_point = polylabel(largest_part, tolerance=0.001)
 
                             if isinstance(label_point, Point):
-                                label_coords = [label_point.y, label_point.x]
-
-                                label_html = f'<div style="font-size: 8pt; color: black; text-align: center; white-space: nowrap; text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF;">{province_name}</div>'
-
-                                folium.Marker(
-                                    location=label_coords,
-                                    icon=folium.DivIcon(
-                                        html=label_html,
-                                        class_name="province-label"
-                                    ),
-                                ).add_to(province_labels_group)
-
-                        except Exception as e:
+                                final_label_coords = [label_point.y, label_point.x]
+                        except Exception:
                             pass
+
+                if final_label_coords:
+                    folium.Marker(
+                        location=final_label_coords,
+                        icon=folium.DivIcon(
+                            html=label_html,
+                            class_name="province-label",
+                            icon_size=(120, 20),
+                            icon_anchor=(60, 10)
+                        ),
+                    ).add_to(province_labels_group)
 
     full_viewport_css = """
     <style>
@@ -929,81 +947,25 @@ def create_flood_map(gfa_data, province_geojson_path):
     </style>
     """
     m.get_root().html.add_child(folium.Element(full_viewport_css))
-
-    map_id = m.get_name()
-
-    download_button_html = f"""
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <div id="download-map-control" class="leaflet-control" style="
-        position: absolute;
-        bottom: 24px;
-        right: 8px;
-        z-index: 1000;
-    " title="Download Map Image">
-        <a id="download-map-btn-link" href="#" role="button" aria-label="Download Map Image" class="leaflet-bar-part leaflet-bar-part-single" style="
-            width: 34px;
-            height: 34px;
-            color: #444;
-            background-color: white;
-            border: 2px solid rgba(0,0,0,0.35);
-            border-radius: 4px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            text-decoration: none;
-        ">
-            <i class="fa-solid fa-download" style="font-size: 16px;"></i>
-        </a>
-    </div>
+    
+    province_label_css = """
     <style>
-        #download-map-btn-link:hover {{
-            background-color: #f4f4f4;
-        }}
+        .province-label {
+        }
+        .province-label div {
+            position: relative;
+            transform: translate(-50%, -50%);
+            left: 50%;
+            top: 50%;
+            font-size: 8pt;
+            color: black;
+            text-align: center;
+            white-space: nowrap;
+            text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF;
+        }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
-    <script>
-        document.getElementById('download-map-btn-link').onclick = function(e) {{
-            e.preventDefault();
-
-            var mapElement = document.getElementById('{map_id}');
-            if (!mapElement) {{
-                console.error("Map element with ID '{map_id}' not found.");
-                return;
-            }}
-
-            var controlsToHide = document.querySelectorAll('.leaflet-control, .leaflet-top.leaflet-left, .leaflet-top.leaflet-right, .leaflet-bottom.leaflet-left, .leaflet-bottom.leaflet-right');
-            controlsToHide.forEach(function(control) {{
-                control.style.visibility = 'hidden';
-            }});
-
-            domtoimage.toPng(mapElement, {{
-                quality: 0.95,
-                width: mapElement.clientWidth,
-                height: mapElement.clientHeight
-            }})
-            .then(function (dataUrl) {{
-                var link = document.createElement('a');
-                link.download = 'flood_advisory_map.png';
-                link.href = dataUrl;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-
-                controlsToHide.forEach(function(control) {{
-                    control.style.visibility = 'visible';
-                }});
-            }})
-            .catch(function (error) {{
-                console.error('Error capturing map image:', error);
-                alert('Failed to capture map image. Check browser console for details.');
-                controlsToHide.forEach(function(control) {{
-                    control.style.visibility = 'visible';
-                }});
-            }});
-        }};
-    </script>
     """
-    m.get_root().html.add_child(folium.Element(download_button_html))
+    m.get_root().html.add_child(folium.Element(province_label_css))
 
     move_zoom_control_js_html = f"""
     <style>
@@ -1031,8 +993,8 @@ def create_flood_map(gfa_data, province_geojson_path):
 
                     if (controlContainer) {{
                         controlContainer.style.position = 'absolute';
-                        controlContainer.style.bottom = '68px';
-                        controlContainer.style.right = '8px';
+                        controlContainer.style.bottom = '24px';
+                        controlContainer.style.right = '10px';
                         controlContainer.style.top = 'auto';
                         controlContainer.style.left = 'auto';
 
@@ -1061,6 +1023,8 @@ user_am_pm_input = input("Enter 'am' or 'pm': ").lower()
 start_time = time.perf_counter()
 
 gfa_identifiers = extract_gfa_identifiers(user_date_input, user_am_pm_input)
+
+province_label_coordinates = load_province_label_coordinates("centroids.csv")
 
 if gfa_identifiers:
     all_gfa_cap_data = {}
