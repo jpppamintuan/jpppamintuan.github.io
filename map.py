@@ -10,8 +10,9 @@ if ipython:
     ipython.run_line_magic('reset', '-sf')
 
 import folium
+import pandas as pd
 import geopandas as gpd
-from shapely.geometry import Point, Polygon, MultiPolygon
+from shapely.geometry import Point, Polygon
 from shapely.validation import make_valid
 from shapely.ops import polylabel
 import re
@@ -22,7 +23,6 @@ import xml.etree.ElementTree as ET
 import traceback
 from bs4 import BeautifulSoup
 import time
-import pandas as pd
 
 region_order_map = {
     "NCR (National Capital Region)": 0,
@@ -110,24 +110,6 @@ def get_styled_province_function(province_info_dict):
             'fillOpacity': fill_opacity,
         }
     return styled_province_function
-
-def load_province_label_coordinates(csv_filepath="centroids.csv"):
-    try:
-        df = pd.read_csv(csv_filepath)
-        coords_dict = {}
-        for index, row in df.iterrows():
-            province_name_cleaned = str(row['Province']).strip().lower()
-            coords_dict[province_name_cleaned] = [row['Latitude'], row['Longitude']]
-        return coords_dict
-    except FileNotFoundError:
-        print(f"Error: Province coordinates CSV file not found at {csv_filepath}")
-        return {}
-    except KeyError as e:
-        print(f"Error: Missing expected column in CSV: {e}. Make sure you have 'Province', 'Latitude', 'Longitude'.")
-        return {}
-    except Exception as e:
-        print(f"An unexpected error occurred while reading the CSV: {e}")
-        return {}
 
 def process_instruction_text(instruction_text):
     if not isinstance(instruction_text, str):
@@ -576,7 +558,6 @@ def create_flood_map(gfa_data, province_geojson_path):
     ).add_to(m)
 
     m.get_root().html.add_child(folium.Element("<title>General Flood Advisories | DOST-PAGASA</title>"))
-
     m.get_root().html.add_child(folium.Element(
         '<link rel="icon" href="https://pubfiles.pagasa.dost.gov.ph/pagasaweb/images/pagasa-logo.png" type="image/png">'
     ))
@@ -876,48 +857,63 @@ def create_flood_map(gfa_data, province_geojson_path):
             cleaned_province_name_lower = province_name.replace('Province of ', '').strip().lower()
 
             if cleaned_province_name_lower in province_info:
-                label_coords = province_label_coordinates.get(cleaned_province_name_lower)
-
-                label_html = f'<div style="font-size: 8pt; color: black; text-align: center; white-space: nowrap; text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF;">{province_name}</div>'
+                label_lat = row.get('label_lat')
+                label_lon = row.get('label_lon')
 
                 final_label_coords = None
-                if label_coords:
-                    final_label_coords = label_coords
-                elif row.geometry:
-                    geometry_for_label = None
-                    if not row.geometry.is_valid:
-                        try:
-                            repaired_geometry = make_valid(row.geometry)
-                            if repaired_geometry and not repaired_geometry.is_empty and repaired_geometry.is_valid:
-                                geometry_for_label = repaired_geometry
-                        except Exception:
-                            pass
-                    else:
-                        geometry_for_label = row.geometry
 
-                    if geometry_for_label and geometry_for_label.is_valid:
-                        label_point = None
-                        try:
-                            if geometry_for_label.geom_type == 'Polygon':
-                                label_point = polylabel(geometry_for_label, tolerance=0.001)
-                            elif geometry_for_label.geom_type == 'MultiPolygon':
-                                largest_part = None
-                                max_area = -1
-                                for part in geometry_for_label.geoms:
-                                    if isinstance(part, Polygon) and part.is_valid:
-                                        part_area = part.area
-                                        if part_area > max_area:
-                                            largest_part = part
-                                            max_area = part_area
-                                if largest_part:
-                                    label_point = polylabel(largest_part, tolerance=0.001)
+                if pd.notna(label_lat) and pd.notna(label_lon):
+                    try:
+                        final_label_coords = [float(label_lat), float(label_lon)]
+                    except ValueError:
+                        print(f"Warning: Non-numeric label_lat/lon for {province_name}. Falling back to polylabel.")
+                        final_label_coords = None
+                else:
+                    print(f"Info: Missing label_lat/lon for {province_name}. Falling back to polylabel.")
 
-                            if isinstance(label_point, Point):
-                                final_label_coords = [label_point.y, label_point.x]
-                        except Exception:
-                            pass
+                if final_label_coords is None:
+                    if row.geometry:
+                        geometry_for_label = None
 
+                        if not row.geometry.is_valid:
+                            try:
+                                repaired_geometry = make_valid(row.geometry)
+                                if repaired_geometry and not repaired_geometry.is_empty and repaired_geometry.is_valid:
+                                    geometry_for_label = repaired_geometry
+                            except Exception as e:
+                                print(f"Error repairing geometry for {province_name}: {e}")
+                                geometry_for_label = None
+                        else:
+                            geometry_for_label = row.geometry
+
+                        if geometry_for_label and geometry_for_label.is_valid:
+                            label_point = None
+                            try:
+                                if geometry_for_label.geom_type == 'Polygon':
+                                    label_point = polylabel(geometry_for_label, tolerance=0.001)
+                                elif geometry_for_label.geom_type == 'MultiPolygon':
+                                    largest_part = None
+                                    max_area = -1
+                                    for part in geometry_for_label.geoms:
+                                        if isinstance(part, Polygon) and part.is_valid:
+                                            part_area = part.area
+                                            if part_area > max_area:
+                                                largest_part = part
+                                                max_area = part_area
+                                    if largest_part:
+                                        label_point = polylabel(largest_part, tolerance=0.001)
+
+                                if isinstance(label_point, Point):
+                                    final_label_coords = [label_point.y, label_point.x]
+                                else:
+                                    print(f"Warning: polylabel returned non-Point for {province_name}. Skipping label.")
+                            except Exception as e:
+                                print(f"Error calculating polylabel for {province_name}: {e}")
+                                pass
+                
                 if final_label_coords:
+                    label_html = f'<div style="font-size: 8pt; color: black; text-align: center; white-space: nowrap; text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF;">{province_name}</div>'
+
                     folium.Marker(
                         location=final_label_coords,
                         icon=folium.DivIcon(
@@ -927,6 +923,8 @@ def create_flood_map(gfa_data, province_geojson_path):
                             icon_anchor=(60, 10)
                         ),
                     ).add_to(province_labels_group)
+                else:
+                    print(f"Skipping label for {province_name} due to missing or invalid coordinates (no custom and no valid polylabel).")
 
     full_viewport_css = """
     <style>
@@ -1023,8 +1021,6 @@ user_am_pm_input = input("Enter 'am' or 'pm': ").lower()
 start_time = time.perf_counter()
 
 gfa_identifiers = extract_gfa_identifiers(user_date_input, user_am_pm_input)
-
-province_label_coordinates = load_province_label_coordinates("centroids.csv")
 
 if gfa_identifiers:
     all_gfa_cap_data = {}
