@@ -355,6 +355,8 @@ def extract_cap_data(identifier):
     present_weather_value = 'N/A'
     rainfall_forecast_value = 'N/A'
     severity_raw_value = 'Unknown'
+    msg_type_value = 'N/A'
+    references_value = None
 
     try:
         response = requests.get(cap_url)
@@ -367,12 +369,14 @@ def extract_cap_data(identifier):
         }
 
         sent_element = root.find('cap:sent', namespaces)
+        msg_type_element = root.find('cap:msgType', namespaces)
+        references_element = root.find('cap:references', namespaces)
         info_element = root.find('cap:info', namespaces)
 
         event_element = info_element.find('cap:event', namespaces) if info_element is not None else None
         if event_element is not None and event_element.text is not None:
             event_value = event_element.text.strip()
-     
+
         severity_element = info_element.find('cap:severity', namespaces) if info_element is not None else None
         severity_raw_value = severity_element.text.strip() if severity_element is not None and severity_element.text is not None else 'Unknown'
 
@@ -399,9 +403,10 @@ def extract_cap_data(identifier):
             rainfall_forecast_match = re.search(r"The 12-hour rainfall forecast is(.*?)(?:\s*WATERCOURSES (?:STILL )?LIKELY TO BE AFFECTED :|\s*$)", description_value, re.DOTALL)
             if rainfall_forecast_match:
                 rainfall_forecast_value = rainfall_forecast_match.group(1).strip()
-             
+
                 if rainfall_forecast_value:
                     rainfall_forecast_value = rainfall_forecast_value[0].upper() + rainfall_forecast_value[1:].lower()
+
 
         parameter_elements = info_element.findall('cap:parameter', namespaces) if info_element is not None else []
         for param_element in parameter_elements:
@@ -424,6 +429,9 @@ def extract_cap_data(identifier):
         cap_data['rainfall_forecast'] = rainfall_forecast_value
         cap_data['rivers_info_by_province'] = {}
         cap_data['severity_raw'] = severity_raw_value
+        cap_data['msgType'] = msg_type_element.text.strip() if msg_type_element is not None and msg_type_element.text is not None else 'N/A'
+        cap_data['references'] = references_element.text.strip() if references_element is not None and references_element.text is not None else None
+
 
         text_to_parse_watercourses = None
 
@@ -433,7 +441,7 @@ def extract_cap_data(identifier):
             text_to_parse_watercourses = instruction_value
         elif description_value and re.search(watercourses_pattern, description_value):
             text_to_parse_watercourses = description_value
-     
+
         if text_to_parse_watercourses:
             match = re.search(watercourses_pattern, text_to_parse_watercourses)
             if match:
@@ -445,11 +453,11 @@ def extract_cap_data(identifier):
 
                 for province_name_raw, rivers_description_raw in matches:
                     cleaned_province_name = province_name_raw.replace('Province of ', '').strip().lower()
-                 
+
                     cleaned_rivers_description = rivers_description_raw.replace('\xa0', ' ').strip()
-                 
+
                     cap_data['rivers_info_by_province'][cleaned_province_name] = cleaned_rivers_description
-                 
+
     except requests.exceptions.RequestException as e:
         print(f"Error fetching CAP file for identifier {identifier}: {e}")
         return None
@@ -462,6 +470,35 @@ def extract_cap_data(identifier):
         return None
 
     return cap_data
+
+def filter_active_advisories(all_raw_gfa_data: dict) -> dict:
+    cancelled_ids = set()
+    
+    for identifier, cap_data in all_raw_gfa_data.items():
+        if cap_data.get('msgType') == 'Cancel':
+            cancelled_ids.add(identifier)
+            
+            references_str = cap_data.get('references')
+            if references_str:
+                parts = references_str.split(',')
+                if len(parts) >= 2:
+                    referred_id = parts[1].strip()
+                    if re.fullmatch(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', referred_id):
+                        cancelled_ids.add(referred_id)
+                    else:
+                        print(f"Warning: Invalid ID format in references for {identifier}: '{referred_id}'. Not adding to cancelled list.")
+                else:
+                    print(f"Warning: Malformed references string for {identifier}: '{references_str}'.")
+
+    active_gfa_data = {}
+    for identifier, cap_data in all_raw_gfa_data.items():
+        if identifier not in cancelled_ids:
+            active_gfa_data[identifier] = cap_data
+    
+    print(f"Identified {len(cancelled_ids)} CAP files (including cancellations and cancelled advisories) to be excluded.")
+    print(f"Remaining active advisories: {len(active_gfa_data)}")
+    
+    return active_gfa_data
 
 def get_severity_color(severity_string):
     if severity_string:
@@ -1023,16 +1060,23 @@ start_time = time.perf_counter()
 gfa_identifiers = extract_gfa_identifiers(user_date_input, user_am_pm_input)
 
 if gfa_identifiers:
-    all_gfa_cap_data = {}
+    all_raw_gfa_cap_data = {}
     for identifier in gfa_identifiers:
+        print(f"Downloading and parsing CAP file: {identifier}")
         cap_data = extract_cap_data(identifier)
         if cap_data:
-            all_gfa_cap_data[identifier] = cap_data
+            all_raw_gfa_cap_data[identifier] = cap_data
 
-    if all_gfa_cap_data:
-        create_flood_map(all_gfa_cap_data, province_geojson_path="PH_Adm2_ProvDists.WGS84.mod.geojson")
+    if all_raw_gfa_cap_data:
+        print("\nFiltering advisories to remove cancellations...")
+        filtered_gfa_data_for_map = filter_active_advisories(all_raw_gfa_cap_data)
+
+        if filtered_gfa_data_for_map:
+            create_flood_map(filtered_gfa_data_for_map, province_geojson_path="PH_Adm2_ProvDists.WGS84.mod.geojson")
+        else:
+            print("After filtering, no active General Flood Advisory data remains for mapping.")
     else:
-        print("No CAP data could be extracted for the specified General Flood Advisory identifiers.")
+        print("No CAP data could be extracted for the specified General Flood Advisory identifiers (even before filtering).")
 else:
     print("No General Flood Advisory identifiers found matching your criteria.")
 
