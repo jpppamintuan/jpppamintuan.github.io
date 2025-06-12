@@ -10,6 +10,7 @@ if ipython:
     ipython.run_line_magic('reset', '-sf')
 
 import folium
+import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point, Polygon
 from shapely.validation import make_valid
@@ -29,8 +30,8 @@ region_order_map = {
     "CAR (Cordillera Administrative Region)": 2,
     "Region 2 (Cagayan Valley)": 3,
     "Region 3 (Central Luzon)": 4,
-    "Region 4A (CALABARZON)": 5,
-    "Region 4B (MIMAROPA)": 6,
+    "Region 4-A (CALABARZON)": 5,
+    "Region 4-B (MIMAROPA)": 6,
     "Region 5 (Bicol Region)": 7,
     "Region 6 (Western Visayas)": 8,
     "Region 7 (Central Visayas)": 9,
@@ -354,6 +355,8 @@ def extract_cap_data(identifier):
     present_weather_value = 'N/A'
     rainfall_forecast_value = 'N/A'
     severity_raw_value = 'Unknown'
+    msg_type_value = 'N/A'
+    references_value = None
 
     try:
         response = requests.get(cap_url)
@@ -366,12 +369,14 @@ def extract_cap_data(identifier):
         }
 
         sent_element = root.find('cap:sent', namespaces)
+        msg_type_element = root.find('cap:msgType', namespaces)
+        references_element = root.find('cap:references', namespaces)
         info_element = root.find('cap:info', namespaces)
 
         event_element = info_element.find('cap:event', namespaces) if info_element is not None else None
         if event_element is not None and event_element.text is not None:
             event_value = event_element.text.strip()
-     
+
         severity_element = info_element.find('cap:severity', namespaces) if info_element is not None else None
         severity_raw_value = severity_element.text.strip() if severity_element is not None and severity_element.text is not None else 'Unknown'
 
@@ -398,9 +403,10 @@ def extract_cap_data(identifier):
             rainfall_forecast_match = re.search(r"The 12-hour rainfall forecast is(.*?)(?:\s*WATERCOURSES (?:STILL )?LIKELY TO BE AFFECTED :|\s*$)", description_value, re.DOTALL)
             if rainfall_forecast_match:
                 rainfall_forecast_value = rainfall_forecast_match.group(1).strip()
-             
+
                 if rainfall_forecast_value:
                     rainfall_forecast_value = rainfall_forecast_value[0].upper() + rainfall_forecast_value[1:].lower()
+
 
         parameter_elements = info_element.findall('cap:parameter', namespaces) if info_element is not None else []
         for param_element in parameter_elements:
@@ -423,6 +429,9 @@ def extract_cap_data(identifier):
         cap_data['rainfall_forecast'] = rainfall_forecast_value
         cap_data['rivers_info_by_province'] = {}
         cap_data['severity_raw'] = severity_raw_value
+        cap_data['msgType'] = msg_type_element.text.strip() if msg_type_element is not None and msg_type_element.text is not None else 'N/A'
+        cap_data['references'] = references_element.text.strip() if references_element is not None and references_element.text is not None else None
+
 
         text_to_parse_watercourses = None
 
@@ -432,7 +441,7 @@ def extract_cap_data(identifier):
             text_to_parse_watercourses = instruction_value
         elif description_value and re.search(watercourses_pattern, description_value):
             text_to_parse_watercourses = description_value
-     
+
         if text_to_parse_watercourses:
             match = re.search(watercourses_pattern, text_to_parse_watercourses)
             if match:
@@ -444,11 +453,11 @@ def extract_cap_data(identifier):
 
                 for province_name_raw, rivers_description_raw in matches:
                     cleaned_province_name = province_name_raw.replace('Province of ', '').strip().lower()
-                 
+
                     cleaned_rivers_description = rivers_description_raw.replace('\xa0', ' ').strip()
-                 
+
                     cap_data['rivers_info_by_province'][cleaned_province_name] = cleaned_rivers_description
-                 
+
     except requests.exceptions.RequestException as e:
         print(f"Error fetching CAP file for identifier {identifier}: {e}")
         return None
@@ -461,6 +470,35 @@ def extract_cap_data(identifier):
         return None
 
     return cap_data
+
+def filter_active_advisories(all_raw_gfa_data: dict) -> dict:
+    cancelled_ids = set()
+    
+    for identifier, cap_data in all_raw_gfa_data.items():
+        if cap_data.get('msgType') == 'Cancel':
+            cancelled_ids.add(identifier)
+            
+            references_str = cap_data.get('references')
+            if references_str:
+                parts = references_str.split(',')
+                if len(parts) >= 2:
+                    referred_id = parts[1].strip()
+                    if re.fullmatch(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', referred_id):
+                        cancelled_ids.add(referred_id)
+                    else:
+                        print(f"Warning: Invalid ID format in references for {identifier}: '{referred_id}'. Not adding to cancelled list.")
+                else:
+                    print(f"Warning: Malformed references string for {identifier}: '{references_str}'.")
+
+    active_gfa_data = {}
+    for identifier, cap_data in all_raw_gfa_data.items():
+        if identifier not in cancelled_ids:
+            active_gfa_data[identifier] = cap_data
+    
+    print(f"Identified {len(cancelled_ids)} CAP files (including cancellations and cancelled advisories) to be excluded.")
+    print(f"Remaining active advisories: {len(active_gfa_data)}")
+    
+    return active_gfa_data
 
 def get_severity_color(severity_string):
     if severity_string:
@@ -495,34 +533,55 @@ gfa_category_order = [
     "Final Advisory"
 ]
 
-def format_gfa_provinces(provinces_by_gfa_type):
+def format_gfa_provinces(provinces_by_gfa_type, event_details, issued_date_time_part, validity_info_part):
     color_map = {
         "Flood Warning": {"background": "#B22B42", "text": "#FFFFFF"},
         "Flood Alert": {"background": "#E6793B", "text": "#FFFFFF"},
         "Flood Monitoring": {"background": "#F3C218", "text": "#000000"},
-        "Final Advisory": {"background": "#777777", "text": "#FFFFFF"}
+        "Final Advisory": {"background": "#777777", "text": "#FFFFFF"},
+        # "No Advisory": {"background": "#DDDDDD", "text": "#333333"}
     }
 
-    formatted_html = ""
-    for gfa_type, provinces in provinces_by_gfa_type.items():
-        colors = color_map.get(gfa_type, {"background": "#FFFFFF", "text": "#333333"})
+    formatted_html = """
+    """
+    if not provinces_by_gfa_type:
+         formatted_html += f"""
+        <div style="font-size: 12px; margin-top: 8px; text-align: center; color: #555;">No provinces are currently under General Flood Advisory.</div>
+        """
+    else:
+        for gfa_type in gfa_category_order:
+            if gfa_type in provinces_by_gfa_type:
+                provinces = provinces_by_gfa_type[gfa_type]
+                colors = color_map.get(gfa_type, {"background": "#FFFFFF", "text": "#333333"})
+                details = event_details.get(gfa_type, {'text': '', 'icon': ''})
+                
+                icon_html = f'<img src="{details["icon"]}" style="width: 36px; height: 36px; margin-right: 4px; flex-shrink: 0;">' if details['icon'] else ''
 
-        formatted_html += f"<strong style='" \
-                                     f"font-size: 14px; " \
-                                     f"display: block; " \
-                                     f"width: 100%; " \
-                                     f"text-align: center; " \
-                                     f"margin-top: 2px; " \
-                                     f"padding: 2px 5px; " \
-                                     f"border-radius: 3px; " \
-                                     f"background-color: {colors['background']}; " \
-                                     f"color: {colors['text']};" \
-                                     f"'>{gfa_type}</strong>"
-
-        formatted_html += "<ul style='margin: 0; padding-left: 20px; list-style-type: disc; column-count: 2; column-gap: 15px; break-inside: avoid;'>"
-        for province in provinces:
-            formatted_html += f"<li style='font-size: 12px; margin-bottom: 2px;'>{province}</li>"
-        formatted_html += "</ul>"
+                formatted_html += f"""
+                <div style="
+                    font-size: 14px;
+                    display: flex;
+                    align-items: center;
+                    width: 100%;
+                    text-align: left;
+                    margin-top: 8px;
+                    padding: 4px 8px 5px 4px;
+                    border-radius: 3px;
+                    background-color: {colors['background']};
+                    color: {colors['text']};
+                    font-weight: bold;
+                ">
+                    {icon_html}
+                    <div style="flex-grow: 1;">
+                        {gfa_type}
+                        <div style="font-size: 12px; font-weight: normal; line-height: 1.2;">{details['text']}</div>
+                    </div>
+                </div>
+                <ul style='margin: 0; margin-top: 4px; padding-left: 20px; list-style-type: disc; list-style-position: outside; column-count: 2; column-gap: 8px; break-inside: avoid;'>
+                """
+                for province in provinces:
+                    formatted_html += f"<li style='font-size: 12px; margin-bottom: 2px; color: #333;'>{province}</li>"
+                formatted_html += "</ul>"
     return formatted_html
 
 def create_flood_map(gfa_data, province_geojson_path):
@@ -536,7 +595,6 @@ def create_flood_map(gfa_data, province_geojson_path):
     ).add_to(m)
 
     m.get_root().html.add_child(folium.Element("<title>General Flood Advisories | DOST-PAGASA</title>"))
-
     m.get_root().html.add_child(folium.Element(
         '<link rel="icon" href="https://pubfiles.pagasa.dost.gov.ph/pagasaweb/images/pagasa-logo.png" type="image/png">'
     ))
@@ -550,7 +608,7 @@ def create_flood_map(gfa_data, province_geojson_path):
         severity_raw = data.get('severity_raw', 'Unknown')
         severity_color = get_severity_color(severity_raw)
         severity_level = get_severity_level(severity_raw)
-         
+        
         area_descs = data.get('areaDescs', [])
         region = data.get('region', 'N/A')
         sent_time = data.get('sent', 'N/A')
@@ -566,7 +624,7 @@ def create_flood_map(gfa_data, province_geojson_path):
 
                 if severity_level > current_max_severity:
                     province_rivers_info = rivers_data_for_this_cap.get(cleaned_province_name_cap_lower, 'N/A')
-                     
+                    
                     province_info[cleaned_province_name_cap_lower] = {
                         'color': severity_color,
                         'severity_level': severity_level,
@@ -593,67 +651,27 @@ def create_flood_map(gfa_data, province_geojson_path):
         return
 
     event_details = {
-        'Flood Warning': {
+        "Flood Warning": {
             'text': 'Take appropriate actions immediately.',
             'icon': 'https://pubfiles.pagasa.dost.gov.ph/pagasaweb/icons/hazard/flood/64/flood-warning.png'
         },
-        'Flood Alert': {
+        "Flood Alert": {
             'text': 'Be alert for possible flashfloods and landslides.',
             'icon': 'https://pubfiles.pagasa.dost.gov.ph/pagasaweb/icons/hazard/flood/64/flood-alert.png'
         },
-        'Flood Monitoring': {
+        "Flood Monitoring": {
             'text': 'Take necessary precautionary measures.',
             'icon': 'https://pubfiles.pagasa.dost.gov.ph/pagasaweb/icons/hazard/flood/64/flood-monitoring.png'
         },
-        'Final Advisory': {
+        "Final Advisory": {
             'text': 'Flood is no longer likely unless significant rain occurs.',
             'icon': 'https://pubfiles.pagasa.dost.gov.ph/pagasaweb/icons/hazard/flood/64/final.png'
         },
-        'No Advisory': {
+        "No Advisory": {
             'text': 'No provinces are currently under General Flood Advisory.',
             'icon': ''
         }
     }
-
-    current_overall_event_type = "No Advisory"
-    overall_color = '#777777'
-    overall_text_color = 'white'
-
-    highest_severity_level_on_map = 0
-    if province_info:
-        for prov_data in province_info.values():
-            highest_severity_level_on_map = max(highest_severity_level_on_map, prov_data['severity_level'])
-
-    if highest_severity_level_on_map >= get_severity_level('Extreme'):
-        current_overall_event_type = 'Flood Warning'
-        overall_color = get_severity_color('Extreme')
-        overall_text_color = 'white'
-    elif highest_severity_level_on_map >= get_severity_level('Severe'):
-        current_overall_event_type = 'Flood Alert'
-        overall_color = get_severity_color('Severe')
-        overall_text_color = 'white'
-    elif highest_severity_level_on_map >= get_severity_level('Moderate'):
-        current_overall_event_type = 'Flood Monitoring'
-        overall_color = get_severity_color('Moderate')
-        overall_text_color = 'black'
-    elif highest_severity_level_on_map == get_severity_level('Final'):
-        current_overall_event_type = 'Final Advisory'
-        overall_color = get_severity_color('Final')
-        overall_text_color = 'white'
-
-    selected_event_details = event_details.get(current_overall_event_type, event_details['No Advisory'])
-    descriptive_text = selected_event_details['text']
-    icon_url = selected_event_details['icon']
-
-    header_html_inner_content = ""
-    if icon_url:
-        header_html_inner_content += f'<img src="{icon_url}" style="width: 32px; height: 32px; margin-right: 8px; flex-shrink: 0;">'
-
-    header_html_inner_content += f'''
-        <div style="flex-grow: 1;"> <div style="font-weight: bold;">{current_overall_event_type}</div>
-            <div style="font-size: 0.9em; line-height: 1.2; margin-top: 2px;">{descriptive_text}</div>
-        </div>
-    '''
 
     provinces_by_gfa_type_for_summary = {}
     for cleaned_prov_name_lower, info in province_info.items():
@@ -708,10 +726,10 @@ def create_flood_map(gfa_data, province_geojson_path):
         if latest_sent_time:
             issued_date_time_part, validity_info_part = format_issued_time(latest_sent_time.isoformat())
 
-    gfa_provinces_summary_text = format_gfa_provinces(sorted_provinces_by_gfa_type)
+    gfa_provinces_summary_text = format_gfa_provinces(sorted_provinces_by_gfa_type, event_details, issued_date_time_part, validity_info_part)
 
     info_html = f"""
-    <div style="
+    <div id="InfoBox" style="
         position: absolute;
         top: 10px;
         left: 10px;
@@ -724,88 +742,119 @@ def create_flood_map(gfa_data, province_geojson_path):
         align-items: flex-start;
         font-family: Arial, sans-serif;
         border: 2px solid rgba(0,0,0,0.35);
+        width: 320px;
         max-width: 320px;
     ">
-        <div style="display: flex; align-items: center; width: 100%;">
+        <div style="display: flex; align-items: center; width: 100%; margin-bottom: 4px;">
             <img src="https://pubfiles.pagasa.dost.gov.ph/pagasaweb/images/pagasa-logo.png" alt="PAGASA Logo" style="width: 44px; height: 44px; margin-right: 8px;">
             <div style="display: flex; flex-direction: column;">
                 <span style="font-size: 14px; font-weight: bold; color: #333;">DOST-PAGASA</span>
                 <span style="font-size: 14px; color: #555;">Flood Forecasting and Warning Center</span>
             </div>
         </div>
-        <div style="display: flex; flex-direction: column; width: 100%;">
-            <span style="font-size: 24px; font-weight: bold; color: #333; margin-top: 4px">General Flood Advisories</span>
+
+        <div style="display: flex; flex-direction: column; width: 100%; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 8px;">
+            <span style="font-size: 24px; font-weight: bold; color: #333; margin-top: 2px">General Flood Advisories</span>
             <span style="font-size: 14px; color: #333;">Issued at: {issued_date_time_part}</span>
             <span style="font-size: 11px; color: #333;">({validity_info_part})</span>
         </div>
 
-        <div style="
-            width: 100%;
-            background-color: {overall_color};
-            color: {overall_text_color};
-            padding: 8px;
-            border-radius: 4px;
-            margin-top: 8px;
-            margin-bottom: 8px;
+        <div id="provincesHeader" style="
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #333;
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            text-align: left;
+            user-select: none;
+            width: 100%;
         ">
-            {header_html_inner_content}
+            <span>Provinces under Active Advisories:</span>
+            <i class="fa-solid fa-chevron-up" id="collapseIcon" style="transition: transform 0.3s ease-in-out;"></i>
         </div>
-        <div style="width: 100%; border-top: 1px solid #eee; margin-top: 4px; padding-top: 8px;">
-            <div id="summaryHeader" style="
-                font-size: 14px;
-                font-weight: bold;
-                cursor: pointer;
-                color: #333;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                user-select: none;
-            ">
-                <span>Provinces under Active Advisories:</span>
-                <i class="fa-solid fa-chevron-down" id="collapseIcon" style="transition: transform 0.3s ease-in-out;"></i>
-            </div>
-            <div id="provincesSummaryContent" style="
-                margin-top: 4px;
-                font-size: 14px;
-                max-height: 480px;
-                overflow-y: auto;
-                box-sizing: border-box;
-                width: 100%;
-                display: none;
-                transition: max-height 0.3s ease-in-out;
-            ">
-                {gfa_provinces_summary_text}
-            </div>
+        <div id="provincesSummaryContent" style="
+            font-size: 14px;
+            max-height: calc(100vh - 197px);
+            overflow-y: auto;
+            box-sizing: border-box;
+            width: 100%;
+            display: block;
+            transition: max-height 0.3s ease-in-out;
+        ">
+            {gfa_provinces_summary_text}
         </div>
-    </div>
+        </div>
     """
     m.get_root().html.add_child(folium.Element(info_html))
 
     toggle_script = """
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            var header = document.getElementById('summaryHeader');
+            var header = document.getElementById('provincesHeader');
             var content = document.getElementById('provincesSummaryContent');
             var icon = document.getElementById('collapseIcon');
+            var infoBox = document.getElementById('InfoBox');
+
+            var isThreeColumn = false;
+
+            function adjustLayout() {
+                if (!infoBox) {
+                    console.warn("Info box element not found for width adjustment.");
+                    return;
+                }
+
+                var provinceLists = content.querySelectorAll('ul');
+                var provinceItems = content.querySelectorAll('li');
+
+                if (content.scrollHeight > content.clientHeight && !isThreeColumn) {
+                    provinceLists.forEach(function(ul) {
+                        ul.style.columnCount = '3';
+                        ul.style.columnGap = '8px';
+                    });
+                    provinceItems.forEach(function(li) {
+                        li.style.fontSize = '11px';
+                        li.style.marginBottom = '1px';
+                    });
+                    infoBox.style.width = '400px';
+                    infoBox.style.maxWidth = '400px';
+                    isThreeColumn = true;
+                    console.log('Switched to 3 columns / 360px width / 11px font size due to scrollbar.');
+
+                } else if (!isThreeColumn) {
+                    provinceLists.forEach(function(ul) {
+                        ul.style.columnCount = '2';
+                        ul.style.columnGap = '8px';
+                    });
+                    provinceItems.forEach(function(li) {
+                        li.style.fontSize = '12px';
+                    });
+                    infoBox.style.width = '320px';
+                    infoBox.style.maxWidth = '320px';
+                    console.log('Reverted to 2 columns / 320px width / 12px font size (no scrollbar).');
+                }
+            }
 
             content.style.display = 'block';
             icon.classList.remove('fa-chevron-down');
             icon.classList.add('fa-chevron-up');
 
+            adjustLayout();
+
             header.onclick = function() {
-                if (content.style.display === 'none') {
+                if (content.style.display === 'none' || content.style.display === '') {
                     content.style.display = 'block';
                     icon.classList.remove('fa-chevron-down');
                     icon.classList.add('fa-chevron-up');
+                    adjustLayout();
                 } else {
                     content.style.display = 'none';
                     icon.classList.remove('fa-chevron-up');
                     icon.classList.add('fa-chevron-down');
                 }
             };
+
+            window.addEventListener('resize', adjustLayout);
         });
     </script>
     """
@@ -831,7 +880,7 @@ def create_flood_map(gfa_data, province_geojson_path):
 
     folium.GeoJson(
         provinces_gdf,
-        name='Flood Advisory Provinces Colored',
+        name='Areas (Provinces under Active Advisories)',
         style_function=map_styled_province_function,
         tooltip=tooltip_field
     ).add_to(m)
@@ -845,58 +894,74 @@ def create_flood_map(gfa_data, province_geojson_path):
             cleaned_province_name_lower = province_name.replace('Province of ', '').strip().lower()
 
             if cleaned_province_name_lower in province_info:
-                if row.geometry:
-                    geometry_for_label = None
+                label_lat = row.get('label_lat')
+                label_lon = row.get('label_lon')
 
-                    if not row.geometry.is_valid:
-                        try:
-                            repaired_geometry = make_valid(row.geometry)
-                            if repaired_geometry and not repaired_geometry.is_empty and repaired_geometry.is_valid:
-                                geometry_for_label = repaired_geometry
-                            else:
+                final_label_coords = None
+
+                if pd.notna(label_lat) and pd.notna(label_lon):
+                    try:
+                        final_label_coords = [float(label_lat), float(label_lon)]
+                    except ValueError:
+                        print(f"Warning: Non-numeric label_lat/lon for {province_name}. Falling back to polylabel.")
+                        final_label_coords = None
+                else:
+                    print(f"Info: Missing label_lat/lon for {province_name}. Falling back to polylabel.")
+
+                if final_label_coords is None:
+                    if row.geometry:
+                        geometry_for_label = None
+
+                        if not row.geometry.is_valid:
+                            try:
+                                repaired_geometry = make_valid(row.geometry)
+                                if repaired_geometry and not repaired_geometry.is_empty and repaired_geometry.is_valid:
+                                    geometry_for_label = repaired_geometry
+                            except Exception as e:
+                                print(f"Error repairing geometry for {province_name}: {e}")
+                                geometry_for_label = None
+                        else:
+                            geometry_for_label = row.geometry
+
+                        if geometry_for_label and geometry_for_label.is_valid:
+                            label_point = None
+                            try:
+                                if geometry_for_label.geom_type == 'Polygon':
+                                    label_point = polylabel(geometry_for_label, tolerance=0.001)
+                                elif geometry_for_label.geom_type == 'MultiPolygon':
+                                    largest_part = None
+                                    max_area = -1
+                                    for part in geometry_for_label.geoms:
+                                        if isinstance(part, Polygon) and part.is_valid:
+                                            part_area = part.area
+                                            if part_area > max_area:
+                                                largest_part = part
+                                                max_area = part_area
+                                    if largest_part:
+                                        label_point = polylabel(largest_part, tolerance=0.001)
+
+                                if isinstance(label_point, Point):
+                                    final_label_coords = [label_point.y, label_point.x]
+                                else:
+                                    print(f"Warning: polylabel returned non-Point for {province_name}. Skipping label.")
+                            except Exception as e:
+                                print(f"Error calculating polylabel for {province_name}: {e}")
                                 pass
-                        except Exception as e:
-                            geometry_for_label = None
-                    else:
-                        geometry_for_label = row.geometry
+                
+                if final_label_coords:
+                    label_html = f'<div style="font-size: 8pt; color: black; text-align: center; white-space: nowrap; text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF;">{province_name}</div>'
 
-                    if geometry_for_label and geometry_for_label.is_valid:
-                        label_point = None
-
-                        try:
-                            # You need to ensure 'polylabel' is imported or defined
-                            if geometry_for_label.geom_type == 'Polygon':
-                                label_point = polylabel(geometry_for_label, tolerance=0.001)
-
-                            elif geometry_for_label.geom_type == 'MultiPolygon':
-                                largest_part = None
-                                max_area = -1
-
-                                for part in geometry_for_label.geoms:
-                                    if isinstance(part, Polygon) and part.is_valid:
-                                        part_area = part.area
-                                        if part_area > max_area:
-                                            largest_part = part
-                                            max_area = part_area
-
-                                if largest_part:
-                                    label_point = polylabel(largest_part, tolerance=0.001)
-
-                            if isinstance(label_point, Point):
-                                label_coords = [label_point.y, label_point.x]
-
-                                label_html = f'<div style="font-size: 8pt; color: black; text-align: center; white-space: nowrap; text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF;">{province_name}</div>'
-
-                                folium.Marker(
-                                    location=label_coords,
-                                    icon=folium.DivIcon(
-                                        html=label_html,
-                                        class_name="province-label"
-                                    ),
-                                ).add_to(province_labels_group)
-
-                        except Exception as e:
-                            pass
+                    folium.Marker(
+                        location=final_label_coords,
+                        icon=folium.DivIcon(
+                            html=label_html,
+                            class_name="province-label",
+                            icon_size=(120, 20),
+                            icon_anchor=(60, 10)
+                        ),
+                    ).add_to(province_labels_group)
+                else:
+                    print(f"Skipping label for {province_name} due to missing or invalid coordinates (no custom and no valid polylabel).")
 
     full_viewport_css = """
     <style>
@@ -917,81 +982,25 @@ def create_flood_map(gfa_data, province_geojson_path):
     </style>
     """
     m.get_root().html.add_child(folium.Element(full_viewport_css))
-
-    map_id = m.get_name()
-
-    download_button_html = f"""
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <div id="download-map-control" class="leaflet-control" style="
-        position: absolute;
-        bottom: 24px;
-        right: 8px;
-        z-index: 1000;
-    " title="Download Map Image">
-        <a id="download-map-btn-link" href="#" role="button" aria-label="Download Map Image" class="leaflet-bar-part leaflet-bar-part-single" style="
-            width: 34px;
-            height: 34px;
-            color: #444;
-            background-color: white;
-            border: 2px solid rgba(0,0,0,0.35);
-            border-radius: 4px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            text-decoration: none;
-        ">
-            <i class="fa-solid fa-download" style="font-size: 16px;"></i>
-        </a>
-    </div>
+    
+    province_label_css = """
     <style>
-        #download-map-btn-link:hover {{
-            background-color: #f4f4f4;
-        }}
+        .province-label {
+        }
+        .province-label div {
+            position: relative;
+            transform: translate(-50%, -50%);
+            left: 50%;
+            top: 50%;
+            font-size: 8pt;
+            color: black;
+            text-align: center;
+            white-space: nowrap;
+            text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF;
+        }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
-    <script>
-        document.getElementById('download-map-btn-link').onclick = function(e) {{
-            e.preventDefault();
-
-            var mapElement = document.getElementById('{map_id}');
-            if (!mapElement) {{
-                console.error("Map element with ID '{map_id}' not found.");
-                return;
-            }}
-
-            var controlsToHide = document.querySelectorAll('.leaflet-control, .leaflet-top.leaflet-left, .leaflet-top.leaflet-right, .leaflet-bottom.leaflet-left, .leaflet-bottom.leaflet-right');
-            controlsToHide.forEach(function(control) {{
-                control.style.visibility = 'hidden';
-            }});
-
-            domtoimage.toPng(mapElement, {{
-                quality: 0.95,
-                width: mapElement.clientWidth,
-                height: mapElement.clientHeight
-            }})
-            .then(function (dataUrl) {{
-                var link = document.createElement('a');
-                link.download = 'flood_advisory_map.png';
-                link.href = dataUrl;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-
-                controlsToHide.forEach(function(control) {{
-                    control.style.visibility = 'visible';
-                }});
-            }})
-            .catch(function (error) {{
-                console.error('Error capturing map image:', error);
-                alert('Failed to capture map image. Check browser console for details.');
-                controlsToHide.forEach(function(control) {{
-                    control.style.visibility = 'visible';
-                }});
-            }});
-        }};
-    </script>
     """
-    m.get_root().html.add_child(folium.Element(download_button_html))
+    m.get_root().html.add_child(folium.Element(province_label_css))
 
     move_zoom_control_js_html = f"""
     <style>
@@ -1019,8 +1028,8 @@ def create_flood_map(gfa_data, province_geojson_path):
 
                     if (controlContainer) {{
                         controlContainer.style.position = 'absolute';
-                        controlContainer.style.bottom = '68px';
-                        controlContainer.style.right = '8px';
+                        controlContainer.style.bottom = '24px';
+                        controlContainer.style.right = '10px';
                         controlContainer.style.top = 'auto';
                         controlContainer.style.left = 'auto';
 
@@ -1036,7 +1045,7 @@ def create_flood_map(gfa_data, province_geojson_path):
     </script>
     """
     m.get_root().html.add_child(folium.Element(move_zoom_control_js_html))
-     
+    
     folium.LayerControl().add_to(m)
     m.fit_bounds([southwest, northeast])
     map_output_path = "gfa.html"
@@ -1051,16 +1060,23 @@ start_time = time.perf_counter()
 gfa_identifiers = extract_gfa_identifiers(user_date_input, user_am_pm_input)
 
 if gfa_identifiers:
-    all_gfa_cap_data = {}
+    all_raw_gfa_cap_data = {}
     for identifier in gfa_identifiers:
+        print(f"Downloading and parsing CAP file: {identifier}")
         cap_data = extract_cap_data(identifier)
         if cap_data:
-            all_gfa_cap_data[identifier] = cap_data
+            all_raw_gfa_cap_data[identifier] = cap_data
 
-    if all_gfa_cap_data:
-        create_flood_map(all_gfa_cap_data, province_geojson_path="PH_Adm2_ProvDists.WGS84.mod.geojson")
+    if all_raw_gfa_cap_data:
+        print("\nFiltering advisories to remove cancellations...")
+        filtered_gfa_data_for_map = filter_active_advisories(all_raw_gfa_cap_data)
+
+        if filtered_gfa_data_for_map:
+            create_flood_map(filtered_gfa_data_for_map, province_geojson_path="PH_Adm2_ProvDists.WGS84.mod.geojson")
+        else:
+            print("After filtering, no active General Flood Advisory data remains for mapping.")
     else:
-        print("No CAP data could be extracted for the specified General Flood Advisory identifiers.")
+        print("No CAP data could be extracted for the specified General Flood Advisory identifiers (even before filtering).")
 else:
     print("No General Flood Advisory identifiers found matching your criteria.")
 
