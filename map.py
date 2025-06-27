@@ -1071,6 +1071,60 @@ def create_flood_map(gfa_data, province_geojson_path):
     m.save(map_output_path)
     print(f"\nInteractive map saved to {map_output_path}")
 
+def take_map_screenshot(html_file_path, output_image_path):
+    print(f"\nAttempting to take screenshot of {html_file_path}...")
+    
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=810,1080")
+    chrome_options.add_argument("--hide-scrollbars")
+    chrome_options.add_argument("--force-device-scale-factor=1")
+
+    try:
+        service = Service('./chromedriver.exe')
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+    except Exception as e:
+        print(f"Error initializing WebDriver: {e}")
+        print("Please ensure ChromeDriver is installed and its path is correctly specified.")
+        print("You can download ChromeDriver from: https://chromedriver.chromium.org/downloads")
+        return
+
+    try:
+        driver.get(f"file:///Z:/04 OTHER FILES/13 Presentations/2. IBF/GFA Map/gfa.html")
+
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.CLASS_NAME, 'leaflet-container'))
+        )
+        # print("Map container detected. Waiting a bit more for full rendering...")
+        time.sleep(1)
+
+        map_id = driver.execute_script("""
+            var mapElement = document.querySelector('.leaflet-container');
+            if (mapElement && mapElement.id) {
+                return mapElement.id;
+            }
+            return null;
+        """)
+
+        if map_id:
+            # print(f"Found map ID: {map_id}. Panning map view to the right for screenshot...")
+            driver.execute_script(f"{map_id}.panBy([-110, 5]);")
+            time.sleep(3)
+        # else:
+            # print("Could not find the map container ID. Cannot pan the map.")
+
+        driver.save_screenshot(output_image_path)
+        print(f"Screenshot saved to {output_image_path}.")
+
+    except Exception as e:
+        print(f"An error occurred during screenshot capture: {e}")
+        traceback.print_exc()
+    finally:
+        driver.quit()
+        # print("WebDriver closed.")
+
 user_date_input = input("Enter the date (YYYY-MM-DD), example 2025-01-01: ")
 user_am_pm_input = input("Enter 'am' or 'pm': ").lower()
 
@@ -1091,7 +1145,10 @@ if gfa_identifiers:
         filtered_gfa_data_for_map = filter_active_advisories(all_raw_gfa_cap_data)
 
         if filtered_gfa_data_for_map:
+            map_output_path = "gfa.html"
             create_flood_map(filtered_gfa_data_for_map, province_geojson_path="PH_Adm2_ProvDists.WGS84.mod.geojson")
+            screenshot_output_path = "gfamap.png"
+            take_map_screenshot(map_output_path, screenshot_output_path)
         else:
             print("After filtering, no active General Flood Advisory data remains for mapping.")
     else:
