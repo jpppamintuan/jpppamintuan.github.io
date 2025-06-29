@@ -1074,7 +1074,7 @@ def create_flood_map(gfa_data, province_geojson_path):
     folium.LayerControl().add_to(m)
     m.fit_bounds([southwest, northeast])
     m.save(map_output_path)
-    print(f"\nInteractive map saved to {map_output_path}")
+    print(f"\nInteractive map saved to {map_output_path}.")
 
 def take_map_screenshot(html_file_path, output_image_path):
     print(f"\nAttempting to take screenshot of {html_file_path}...")
@@ -1083,7 +1083,7 @@ def take_map_screenshot(html_file_path, output_image_path):
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--window-size=810,1080")
+    chrome_options.add_argument("--window-size=826,1227")
     chrome_options.add_argument("--hide-scrollbars")
     chrome_options.add_argument("--force-device-scale-factor=1")
 
@@ -1115,7 +1115,7 @@ def take_map_screenshot(html_file_path, output_image_path):
 
         if map_id:
             # print(f"Found map ID: {map_id}. Panning map view to the right for screenshot...")
-            driver.execute_script(f"{map_id}.panBy([-120, 5]);")
+            driver.execute_script(f"{map_id}.panBy([-140, 10]);")
             time.sleep(3)
         # else:
             # print("Could not find the map container ID. Cannot pan the map.")
