@@ -1115,7 +1115,7 @@ def take_map_screenshot(html_file_path, output_image_path):
 
         if map_id:
             # print(f"Found map ID: {map_id}. Panning map view to the right for screenshot...")
-            driver.execute_script(f"{map_id}.panBy([-115, 5]);")
+            driver.execute_script(f"{map_id}.panBy([-120, 5]);")
             time.sleep(3)
         # else:
             # print("Could not find the map container ID. Cannot pan the map.")
