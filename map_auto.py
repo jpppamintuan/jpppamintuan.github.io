@@ -1083,7 +1083,7 @@ def take_map_screenshot(html_file_path, output_image_path):
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--window-size=826,1227")
+    chrome_options.add_argument("--window-size=880,1227")
     chrome_options.add_argument("--hide-scrollbars")
     chrome_options.add_argument("--force-device-scale-factor=1")
 
