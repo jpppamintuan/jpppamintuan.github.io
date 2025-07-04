@@ -11,37 +11,30 @@
         html, body {
             margin: 0;
             padding: 0;
-            height: 100%; /* Ensures main containers span full viewport if needed */
+            height: 100%;
         }
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #ffffff; /* White background */
-            display: flex; /* Use flexbox for vertical stacking */
-            flex-direction: column; /* Stack items vertically */
-            align-items: flex-start; /* Left-align items */
+            background-color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
         }
 
-        /* Base image styles for all images (overriding Tailwind defaults) */
         img {
-            display: block; /* Ensures images behave as block elements for vertical stacking */
-            margin-bottom: 0; /* No space between images */
-            /* THESE ARE CRUCIAL overrides for Tailwind's default image styling */
-            max-width: none !important; /* Prevents Tailwind from limiting max-width to 100% */
-            box-sizing: content-box !important; /* Ensure padding/border don't affect width calculations */
+            display: block;
+            margin-bottom: 0;
+            max-width: none !important;
+            box-sizing: content-box !important;
         }
 
-        /* Styles for 24h images: 100% page width, height auto */
         .img-24h {
             width: 100% !important;
-            height: auto !important; /* Let height be proportional to 100% width */
+            height: auto !important;
         }
 
-        /* Styles for 48h and 72h images in both groups */
-        /* Their height will be set by JavaScript, width will be auto */
         .img-48h-72h {
-            width: auto !important;   /* Let width adjust proportionally based on JS-set height */
-            /* height will be set dynamically by JavaScript as an inline style */
-            /* Do NOT set height: auto !important; here, as it conflicts with JS */
+            width: auto !important;
         }
     </style>
 </head>
@@ -59,47 +52,37 @@
             const ph24hImg = document.getElementById('ph24h');
             const ncr24hImg = document.getElementById('ncr24h');
 
-            // Select all "other day" images for each group
             const phOtherDaysImgs = document.querySelectorAll('.img-48h-72h.ph-group');
             const ncrOtherDaysImgs = document.querySelectorAll('.img-48h-72h.ncr-group');
 
             function setDynamicImageHeights() {
-                console.log('setDynamicImageHeights running...'); // Debug: Check if function runs
 
-                // Set heights for PH group
-                const ph24hHeight = ph24hImg.offsetHeight; // Get rendered height of 24h PH image
-                console.log('ph24hImg.offsetHeight:', ph24hHeight); // Debug: Check height value
+                const ph24hHeight = ph24hImg.offsetHeight;
 
-                if (ph24hHeight > 0) { // Only set if height is valid (image loaded)
+                if (ph24hHeight > 0) {
                     phOtherDaysImgs.forEach(img => {
-                        img.style.height = `${ph24hHeight}px`; // Apply exact height as inline style
-                        console.log('Setting PH other day image height to:', ph24hHeight, 'px'); // Debug: Check application
+                        img.style.height = `${ph24hHeight}px`;
                     });
                 }
 
-                // Set heights for NCR group
-                const ncr24hHeight = ncr24hImg.offsetHeight; // Get rendered height of 24h NCR image
-                console.log('ncr24hImg.offsetHeight:', ncr24hHeight); // Debug: Check height value
+                const ncr24hHeight = ncr24hImg.offsetHeight;
+                console.log('ncr24hImg.offsetHeight:', ncr24hHeight);
 
-                if (ncr24hHeight > 0) { // Only set if height is valid (image loaded)
+                if (ncr24hHeight > 0) {
                     ncrOtherDaysImgs.forEach(img => {
-                        img.style.height = `${ncr24hHeight}px`; // Apply exact height as inline style
-                        console.log('Setting NCR other day image height to:', ncr24hHeight, 'px'); // Debug: Check application
+                        img.style.height = `${ncr24hHeight}px`;
                     });
                 }
             }
 
-            // Initial height setting after all resources (including images) are loaded
             window.addEventListener('load', setDynamicImageHeights);
 
-            // Update heights on window resize with a debounce to prevent excessive calls
             let resizeTimer;
             window.addEventListener('resize', () => {
                 clearTimeout(resizeTimer);
-                resizeTimer = setTimeout(setDynamicImageHeights, 150); // Adjust every 150ms
+                resizeTimer = setTimeout(setDynamicImageHeights, 150);
             });
 
-            // Call once initially, in case images are already in cache or script runs after layout
             setDynamicImageHeights(); 
         });
     </script>
