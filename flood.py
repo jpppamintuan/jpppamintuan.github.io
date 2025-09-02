@@ -2140,7 +2140,7 @@ if __name__ == "__main__":
                 m = create_flood_map(filtered_gfa_data_for_map, province_geojson_path="PH_Adm2_ProvDists.WGS84.mod.geojson")
                 m.save(map_output_path)
                 inject_sidebar_html(map_output_path, filtered_gfa_data_for_map, province_geojson_path="PH_Adm2_ProvDists.WGS84.mod.geojson")
-                screenshot_output_path = "gfamap.png"
+                screenshot_output_path = "gfamap_new.png"
                 take_map_screenshot(map_output_path, screenshot_output_path)
             else:
                 print("After filtering, no active General Flood Advisory data remains for mapping.")
@@ -2148,7 +2148,7 @@ if __name__ == "__main__":
                 m = create_flood_map({}, province_geojson_path="PH_Adm2_ProvDists.WGS84.mod.geojson")
                 m.save(map_output_path)
                 inject_sidebar_html(map_output_path, {}, province_geojson_path="PH_Adm2_ProvDists.WGS84.mod.geojson")
-                screenshot_output_path = "gfamap.png"
+                screenshot_output_path = "gfamap_new.png"
                 take_map_screenshot(map_output_path, screenshot_output_path)
         else:
             print("No CAP data could be extracted for the specified General Flood Advisory identifiers (even before filtering).")
@@ -2156,7 +2156,7 @@ if __name__ == "__main__":
             m = create_flood_map({}, province_geojson_path="PH_Adm2_ProvDists.WGS84.mod.geojson")
             m.save(map_output_path)
             inject_sidebar_html(map_output_path, {}, province_geojson_path="PH_Adm2_ProvDists.WGS84.mod.geojson")
-            screenshot_output_path = "gfamap.png"
+            screenshot_output_path = "gfamap_new.png"
             take_map_screenshot(map_output_path, screenshot_output_path)
     else:
         print("No General Flood Advisory identifiers found matching your criteria.")
@@ -2164,7 +2164,7 @@ if __name__ == "__main__":
         m = create_flood_map({}, province_geojson_path="PH_Adm2_ProvDists.WGS84.mod.geojson")
         m.save(map_output_path)
         inject_sidebar_html(map_output_path, {}, province_geojson_path="PH_Adm2_ProvDists.WGS84.mod.geojson")
-        screenshot_output_path = "gfamap.png"
+        screenshot_output_path = "gfamap_new.png"
         take_map_screenshot(map_output_path, screenshot_output_path)
 
     end_time = time.perf_counter()
@@ -2174,10 +2174,3 @@ if __name__ == "__main__":
 
 
     print(f"\nProcess completed in {duration:.0f} seconds.")
-
-
-
-
-
-
-
