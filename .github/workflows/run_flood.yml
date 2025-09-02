@@ -50,6 +50,6 @@ jobs:
         if: success()
         run: |
           git add flood.html
-          git add gfamap.png
-          git commit -m "Update flood.html and gfamap.png"
+          git add gfamap_new.png
+          git commit -m "Update flood.html and gfamap_new.png"
           git push
