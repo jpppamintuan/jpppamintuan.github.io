@@ -11,6 +11,8 @@ import pandas as pd
 import geopandas as gpd
 import folium
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 import re
 from urllib.parse import urljoin
@@ -498,7 +500,13 @@ def extract_gfa_identifiers(target_date_str: str, am_pm_str: str):
 
     print(f"Attempting to extract GFA identifiers from: {target_url}...")
     try:
-        response = requests.get(target_url, timeout=10)
+        retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+        adapter = HTTPAdapter(max_retries=retries)
+        session = requests.Session()
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+
+        response = session.get(url, timeout=10)
         response.raise_for_status()
 
         soup = BeautifulSoup(response.content, 'html.parser')
@@ -2176,4 +2184,5 @@ if __name__ == "__main__":
 
 
     print(f"\nProcess completed in {duration:.0f} seconds.")
+
 
