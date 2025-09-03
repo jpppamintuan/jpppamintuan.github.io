@@ -1752,7 +1752,7 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
       padding: 2px 8px 2px 8px;
       font-size: 12px;
       position: fixed;
-      top: 236px;
+      top: 242px;
       left: 407px;
       width: 180px;
       transform: rotate(90deg);
@@ -2190,3 +2190,4 @@ if __name__ == "__main__":
     seconds = duration % 60
 
     print(f"\nProcess completed in {duration:.0f} seconds.")
+
