@@ -506,7 +506,7 @@ def extract_gfa_identifiers(target_date_str: str, am_pm_str: str):
         session.mount("https://", adapter)
         session.mount("http://", adapter)
 
-        response = session.get(url, timeout=10)
+        response = session.get(target_url, timeout=10)
         response.raise_for_status()
 
         soup = BeautifulSoup(response.content, 'html.parser')
@@ -2184,5 +2184,6 @@ if __name__ == "__main__":
 
 
     print(f"\nProcess completed in {duration:.0f} seconds.")
+
 
 
