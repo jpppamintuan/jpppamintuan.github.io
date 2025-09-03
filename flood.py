@@ -2181,9 +2181,4 @@ if __name__ == "__main__":
     minutes = int(duration // 60)
     seconds = duration % 60
 
-
-
     print(f"\nProcess completed in {duration:.0f} seconds.")
-
-
-
