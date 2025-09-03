@@ -1858,27 +1858,27 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
               sidebar.style.left = '0px';
           }
           var openbtn = document.getElementById("openbtn");
-          if (openbtn.style.left === '478px') {
+          if (openbtn.style.left === '382px') {
               openbtn.style.left = '-2px';
               openbtn.title = 'Show Sidebar';
           } else {
-              openbtn.style.left = '478px';
+              openbtn.style.left = '382px';
               openbtn.title = 'Hide Sidebar';
           }
           var gfa_tab = document.getElementById("gfa_tab");
-          if (gfa_tab.style.left === '503px') {
+          if (gfa_tab.style.left === '407px') {
               gfa_tab.style.left = '-23px';
           } else {
-              gfa_tab.style.left = '503px';
+              gfa_tab.style.left = '407px';
           }
           var rb_tab = document.getElementById("rb_tab");
-          if (rb_tab.style.left === '503px') {
+          if (rb_tab.style.left === '407px') {
               rb_tab.style.left = '-23px';
           } else {
-              rb_tab.style.left = '503px';
+              rb_tab.style.left = '407px';
           }
           var icon = openbtn.querySelector('i');
-          if (openbtn.style.left === '478px') {
+          if (openbtn.style.left === '382px') {
               icon.classList.remove('fa-angle-right');
               icon.classList.add('fa-angle-left');
           } else {
@@ -2182,3 +2182,4 @@ if __name__ == "__main__":
     seconds = duration % 60
 
     print(f"\nProcess completed in {duration:.0f} seconds.")
+
