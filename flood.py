@@ -2119,9 +2119,9 @@ if __name__ == "__main__":
 
     start_time = time.perf_counter()
 
-    # gfa_identifiers = extract_gfa_identifiers(user_date_input, user_am_pm_input)
+    gfa_identifiers = extract_gfa_identifiers(user_date_input, user_am_pm_input)
     
-    gfa_identifiers = ['d9f8c9db-e913-4220-a554-c1faae84abef', '9246961f-2e50-433d-a083-1fcb6fec3207', '09d04c75-3292-4dd9-85b9-52481d79d72f', '425d9a82-a60b-4e55-a02d-c83900baa33b', '1cadd0b0-b5bc-421e-bca2-7dc9708fda6a', '8918a4f2-8046-446e-ab4f-9c378bc89f4f', '4409e18f-4258-4110-aad9-b37ab8221e14', 'e2830f08-be4f-417c-af52-9a18ce347f78', 'd60b4c63-9f5f-4bd4-920b-1392a2da9d9f', 'e00a559f-c78f-4fff-ac01-12d8c52b27f5']
+    # gfa_identifiers = ['d9f8c9db-e913-4220-a554-c1faae84abef', '9246961f-2e50-433d-a083-1fcb6fec3207', '09d04c75-3292-4dd9-85b9-52481d79d72f', '425d9a82-a60b-4e55-a02d-c83900baa33b', '1cadd0b0-b5bc-421e-bca2-7dc9708fda6a', '8918a4f2-8046-446e-ab4f-9c378bc89f4f', '4409e18f-4258-4110-aad9-b37ab8221e14', 'e2830f08-be4f-417c-af52-9a18ce347f78', 'd60b4c63-9f5f-4bd4-920b-1392a2da9d9f', 'e00a559f-c78f-4fff-ac01-12d8c52b27f5']
 
     if gfa_identifiers:
         all_raw_gfa_cap_data = {}
@@ -2171,6 +2171,7 @@ if __name__ == "__main__":
     duration = end_time - start_time
     minutes = int(duration // 60)
     seconds = duration % 60
+
 
 
     print(f"\nProcess completed in {duration:.0f} seconds.")
