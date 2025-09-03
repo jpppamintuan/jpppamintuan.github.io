@@ -27,6 +27,7 @@ import math
 import xml.etree.ElementTree as ET
 import traceback
 import time
+import pytz
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -2101,7 +2102,7 @@ def take_map_screenshot(html_file_path, output_image_path):
 # 6. Main Execution Block
 # -----------------------------------------------------------------------------
 if __name__ == "__main__":
-    current_time = datetime.now()
+    current_time = datetime.now(pytz.timezone('Asia/Manila'))
     current_date = current_time.date()
 
     if current_time.hour < 6:
@@ -2175,3 +2176,4 @@ if __name__ == "__main__":
 
 
     print(f"\nProcess completed in {duration:.0f} seconds.")
+
