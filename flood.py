@@ -1721,6 +1721,7 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
     }
     .gfa_tab {
       background-color: #bfbfbf;
+      color: #333;
       border-left: 2px solid rgba(0,0,0,0.125);
       border-top: 2px solid rgba(0,0,0,0.125);
       border-right: 2px solid rgba(0,0,0,0.125);
@@ -1732,6 +1733,7 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
       position: fixed;
       top: 76px;
       left: 407px;
+      width: 160px;
       transform: rotate(90deg);
       transform-origin: 0% 0%;
       z-index: 1001;
@@ -1740,6 +1742,7 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
     }
     .rb_tab {
       background-color: #bfbfbf;
+      color: #333;
       border-left: 2px solid rgba(0,0,0,0.125);
       border-top: 2px solid rgba(0,0,0,0.125);
       border-right: 2px solid rgba(0,0,0,0.125);
@@ -1751,6 +1754,7 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
       position: fixed;
       top: 236px;
       left: 407px;
+      width: 180px;
       transform: rotate(90deg);
       transform-origin: 0% 0%;
       z-index: 1001;
@@ -1766,6 +1770,7 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
     }
     .gfa_tab:hover {
       background-color: #fff;
+      color: #333;
       border-left: 2px solid rgba(0,0,0,0.35);
       border-top: 2px solid rgba(0,0,0,0.35);
       border-right: 2px solid rgba(0,0,0,0.35);
@@ -1773,6 +1778,7 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
     }
     .rb_tab:hover {
       background-color: #fff;
+      color: #333;
       border-left: 2px solid rgba(0,0,0,0.35);
       border-top: 2px solid rgba(0,0,0,0.35);
       border-right: 2px solid rgba(0,0,0,0.35);
@@ -1780,6 +1786,7 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
     }
     .gfa_tab.active-tab {
       background-color: #fff;
+      color: #009bff;
       border-left: 2px solid rgba(0,0,0,0.35);
       border-top: 2px solid rgba(0,0,0,0.35);
       border-right: 2px solid rgba(0,0,0,0.35);
@@ -1788,6 +1795,7 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
     }
     .rb_tab.active-tab {
       background-color: #fff;
+      color: #009bff;
       border-left: 2px solid rgba(0,0,0,0.35);
       border-top: 2px solid rgba(0,0,0,0.35);
       border-right: 2px solid rgba(0,0,0,0.35);
@@ -2182,4 +2190,3 @@ if __name__ == "__main__":
     seconds = duration % 60
 
     print(f"\nProcess completed in {duration:.0f} seconds.")
-
