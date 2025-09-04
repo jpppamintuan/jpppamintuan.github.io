@@ -1711,10 +1711,10 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
       color: black;
     }
     .leaflet-control-layers-toggle {
-      z-index: 100;
+      z-index: 999;
     }
     .leaflet-control-layers-expanded {
-      z-index: 100;
+      z-index: 999;
     }
     .openbtn {
       font-size: 24px;
