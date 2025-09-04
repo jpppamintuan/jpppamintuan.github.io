@@ -1288,14 +1288,6 @@ def create_flood_map(gfa_data, province_geojson_path):
     m.get_root().html.add_child(folium.Element(move_zoom_control_js_html))
     
     folium.LayerControl().add_to(m)
-    move_layer_control_z_html = f"""
-    <style>
-        .leaflet-control-layers-toggle {{
-          z-index: 1;
-        }}
-    </style>
-    """
-    m.get_root().html.add_child(folium.Element(move_layer_control_z_html))
     
     m.fit_bounds([southwest, northeast])
     return m
@@ -1717,6 +1709,12 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
       padding: 15px;
       font-size: 24px;
       color: black;
+    }
+    .leaflet-control-layers-toggle {
+      z-index: 100;
+    }
+    .leaflet-control-layers-expanded {
+      z-index: 100;
     }
     .openbtn {
       font-size: 24px;
