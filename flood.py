@@ -1288,7 +1288,6 @@ def create_flood_map(gfa_data, province_geojson_path):
     m.get_root().html.add_child(folium.Element(move_zoom_control_js_html))
     
     folium.LayerControl().add_to(m)
-    
     m.fit_bounds([southwest, northeast])
     return m
 
@@ -1525,7 +1524,7 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
                 position: absolute;
                 top: 10px;
                 left: 10px;
-                z-index: 1000;
+                z-index: 1002;
                 font-family: Arial, sans-serif;
             ">
                 <div id="GFAInfoBox" class="infobox-content" style="
@@ -1608,7 +1607,7 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
                 position: absolute;
                 top: 10px;
                 left: 10px;
-                z-index: 1000;
+                z-index: 1002;
                 font-family: Arial, sans-serif;
             ">
                 <div id="GFAInfoBox" class="infobox-content" style="
@@ -1697,7 +1696,7 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
       left: 0;
       background-color: #fff;
       overflow-x: hidden;
-      z-index: 1000;
+      z-index: 1002;
       color: white;
       transition: transform 0.5s ease-in-out;
       border-right: 2px solid rgba(0,0,0,0.35);
@@ -1711,8 +1710,7 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
       color: black;
     }
     .leaflet-control-layers {
-      position: absolute;
-      z-index: 999;
+      z-index: 1001;
     }
     .openbtn {
       font-size: 24px;
@@ -1727,7 +1725,7 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
       position: fixed;
       top: 8px;
       left: 382px;
-      z-index: 1001;
+      z-index: 1003;
       border-radius: 0 4px 4px 0;
       transition: transform 0.5s ease-in-out;
     }
@@ -1748,7 +1746,7 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
       width: 160px;
       transform: rotate(90deg);
       transform-origin: 0% 0%;
-      z-index: 1001;
+      z-index: 1003;
       border-radius: 4px 4px 0 0;
       transition: transform 0.5s ease-in-out;
     }
@@ -1769,7 +1767,7 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
       width: 180px;
       transform: rotate(90deg);
       transform-origin: 0% 0%;
-      z-index: 1001;
+      z-index: 1003;
       border-radius: 4px 4px 0 0;
       transition: transform 0.5s ease-in-out;
     }
@@ -1971,6 +1969,12 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
             rbButton.classList.remove('active-tab');
             rbInfoBox.style.display = 'none';
         });
+        document.addEventListener("DOMContentLoaded", function() {
+            var layerControlToggle = document.querySelector('.leaflet-control-layers-toggle');
+            if (layerControlToggle) {
+                layerControlToggle.click();
+            }
+        });
     </script>
     """
     try:
@@ -2043,13 +2047,6 @@ def take_map_screenshot(html_file_path, output_image_path):
 
             print("Attempting to hide '18 Major River Basins' layer...")
             try:
-                # 1. Click the layer control toggle to ensure it's open
-                print("Clicking layer control toggle...")
-                layer_control_toggle = WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, '.leaflet-control-layers-toggle'))
-                )
-                layer_control_toggle.click()
-                
                 # 2. Wait for the layer control to become expanded/visible
                 WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, '.leaflet-control-layers.leaflet-control-layers-expanded'))
