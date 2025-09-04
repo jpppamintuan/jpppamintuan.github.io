@@ -1153,7 +1153,8 @@ def create_flood_map(gfa_data, province_geojson_path):
             font-size: 8pt;
             color: black;
             text-align: center;
-            white-space: nowrap;
+            white-space: normal;
+            max-width: 100px;
             text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF;
         }
     </style>
@@ -1195,13 +1196,27 @@ def create_flood_map(gfa_data, province_geojson_path):
               0.4px -0.4px 0 {shadow_color},
               -0.4px 0.4px 0 {shadow_color},
               0.4px 0.4px 0 {shadow_color};
-            white-space: nowrap;
+            white-space: normal;
+            max-width: 100px;
             text-align: center;
             transform: translate(-50%, -50%);
           }}
         </style>
         """
         m.get_root().html.add_child(folium.Element(label_css))
+        
+        html = f'<div class="river-basin-label-{r.name}">{r["Name"]}</div>'
+        labels_layer.add_child(
+            folium.map.Marker(
+                location=[r['label_lat'], r['label_lon']],
+                icon=folium.DivIcon(
+                    icon_size=(150,36),
+                    icon_anchor=(0,0),
+                    html=html,
+                    class_name="dummy"
+                )
+            )
+        )
 
         geojson_feature = {
             'type': 'Feature',
@@ -1231,14 +1246,6 @@ def create_flood_map(gfa_data, province_geojson_path):
         folium_geojson.add_child(folium.Tooltip(content_html, max_width=450))
         folium_geojson.add_child(folium.Popup(content_html, max_width=450))
         folium_geojson.add_to(geojson_rb)
-        if r.geometry and not r.geometry.is_empty:
-            centroid = r.geometry.centroid
-            folium.Marker(
-                location=[centroid.y, centroid.x],
-                icon=folium.DivIcon(
-                    html=f'<div class="river-basin-label-{r.name}">{r["Name"]}</div>'
-                )
-            ).add_to(labels_layer)
 
     move_zoom_control_js_html = f"""
     <style>
@@ -2190,4 +2197,3 @@ if __name__ == "__main__":
     seconds = duration % 60
 
     print(f"\nProcess completed in {duration:.0f} seconds.")
-
