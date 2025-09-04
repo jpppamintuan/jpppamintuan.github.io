@@ -1290,7 +1290,7 @@ def create_flood_map(gfa_data, province_geojson_path):
     folium.LayerControl().add_to(m)
     move_layer_control_z_html = f"""
     <style>
-        .leaflet-control-layers {{
+        .leaflet-control-layers-toggle {{
           z-index: 1;
         }}
     </style>
