@@ -1688,9 +1688,6 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
         padding: 0;
         overflow: hidden;
     }
-    .leaflet-control-layers {
-      z-index: 100;
-    }
     .sidebar {
       height: 100%;
       width: 384px;
@@ -1711,6 +1708,9 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
       padding: 15px;
       font-size: 24px;
       color: black;
+    }
+    .leaflet-control-layers {
+      z-index: 1;
     }
     .openbtn {
       font-size: 24px;
