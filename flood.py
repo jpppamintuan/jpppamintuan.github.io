@@ -456,8 +456,6 @@ def generate_grouped_list_html(basins_df, color_code, font_size):
             for _, basin in group_df.iterrows():
                 italic_style = "font-style: italic;" if basin['is_subbasin'] else ""
                 name = basin['River Basin']
-                if "Sub-basin" in name:
-                    name = name.replace("Sub-basin", "(Sub-basin)")
                 link = basin['Link']
                 if link:
                     list_items += f'<li style="{italic_style}"><a href="{link}" target="_blank" style="color: {color_code}">{name}</a></li>'
@@ -1819,6 +1817,9 @@ def inject_sidebar_html(file_path, gfa_data, province_geojson_path):
         width: 100vw;
         height: 100vh;
     }
+    .basin-list li {
+      break-inside: avoid;
+    }
     </style>
     """
 
@@ -2199,3 +2200,4 @@ if __name__ == "__main__":
     seconds = duration % 60
 
     print(f"\nProcess completed in {duration:.0f} seconds.")
+
