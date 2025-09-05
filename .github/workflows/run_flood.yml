@@ -2,7 +2,8 @@ name: Generate Flood Map
 
 on:
   schedule:
-    - cron: '58 1,5,9,13,17,21 * * *'
+    - cron: '48 1 * * *'
+    - cron: '58 5,9,13,17,21 * * *'
   workflow_dispatch:
 
 jobs:
