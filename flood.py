@@ -1181,6 +1181,10 @@ def create_flood_map(gfa_data, province_geojson_path):
         else:
             shadow_color = '#009bff'
 
+        italic_style = ''
+        if 'Sub-basin' in r['Name']:
+            italic_style = 'font-style: italic;'
+
         # Generate unique CSS for this label's shadow
         label_css = f"""
         <style>
@@ -1198,6 +1202,7 @@ def create_flood_map(gfa_data, province_geojson_path):
             max-width: 100px;
             text-align: center;
             transform: translate(-50%, -50%);
+            {italic_style}
           }}
         </style>
         """
@@ -2200,4 +2205,5 @@ if __name__ == "__main__":
     seconds = duration % 60
 
     print(f"\nProcess completed in {duration:.0f} seconds.")
+
 
