@@ -2021,7 +2021,7 @@ def take_map_screenshot(html_file_path, output_image_path):
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--window-size=988,1227")
+        chrome_options.add_argument("--window-size=972,1219")
         chrome_options.add_argument("--hide-scrollbars")
         chrome_options.add_argument("--force-device-scale-factor=1")
 
@@ -2206,6 +2206,7 @@ if __name__ == "__main__":
     seconds = duration % 60
 
     print(f"\nProcess completed in {duration:.0f} seconds.")
+
 
 
 
