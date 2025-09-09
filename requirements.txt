@@ -1,6 +1,0 @@
-geopandas
-folium
-pandas
-requests
-beautifulsoup4
-selenium
